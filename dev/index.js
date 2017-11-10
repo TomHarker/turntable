@@ -7,15 +7,34 @@ class App extends React.Component {
   componentWillMount() {
     this.audioContext = new AudioContext();
 
-    this.fpb = 1024;
-    this.rate = 1 / 4.0;
-    this.size = this.fpb * this.rate;
-    this.fpb = this.size / this.rate;
+    this.fpb = 512;
+    this.setRate(1);
+  }
+
+  setRate(desiredRate) {
+    this.dir = desiredRate > 0 ? 1 : -1;
+    this.size = Math.round(this.fpb * Math.abs(desiredRate));
+    this.rate = this.size / this.fpb;
     
     this.x1 = this.arange(0, this.size + 20, 1);
-    this.xp5 = this.arange(0, this.size + 20, this.rate);
-  
-    console.log(this.fpb, this.size);
+    this.xp5 = this.arange(0, this.size + (20 * this.rate), this.rate);
+  }
+
+  play(data) {
+    var process = this.audioContext.createScriptProcessor(this.fpb, 0, 1),
+      c = 10;
+    
+    process.onaudioprocess = (e) => {
+      var slice = this.dir == 1 ? data.slice(c - 10, c + this.size + 10) : data.slice(c - this.size - 10, c + 10).reverse(),
+        interp = linear(this.xp5, this.x1, slice),
+        overlap = (interp.length - this.fpb) / 2,
+        chopped = interp.slice(overlap, interp.length - overlap);
+      c = c + (this.size * this.dir);
+        
+      e.outputBuffer.getChannelData(0).set(chopped);
+    }
+
+    process.connect(this.audioContext.destination);
   }
 
   load(e) {
@@ -40,29 +59,18 @@ class App extends React.Component {
     return array;
   }
 
-  play(data) {
-    var process = this.audioContext.createScriptProcessor(this.fpb, 0, 1),
-      c = 10;
-    
-    process.onaudioprocess = (e) => {
-      var start = c - 10,
-        end = c + this.size + 10,
-        slice = data.slice(start, end),
-        leftChunk = linear(this.xp5, this.x1, slice),
-        overlap = (leftChunk.length - this.fpb) / 2,
-        chopped = leftChunk.slice(overlap, leftChunk.length - overlap);
-
-      c = c + this.size
-        
-      e.outputBuffer.getChannelData(0).set(chopped);
+  fart(e) {
+    if (e.target.value != 0) {
+      this.setRate(e.target.value);
     }
-
-    process.connect(this.audioContext.destination);
   }
 
   render () {
     return (
-      <input onChange={this.load.bind(this)} type="file" id="track" />
+      <div>
+        <input onChange={this.load.bind(this)} type="file" id="track" />
+        <input style={{width:'100%'}} onChange={this.fart.bind(this)} type="range" max="2" min="-2" step="0.01" defaultValue="1" />
+      </div>
     );
   }
 
